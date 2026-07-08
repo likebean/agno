@@ -1,0 +1,224 @@
+/* App shell styles (CopilotKit ships its own Tailwind v4 styles) */
+
+html,
+body {
+  height: 100%;
+  margin: 0;
+  font-family:
+    system-ui,
+    -apple-system,
+    BlinkMacSystemFont,
+    "Segoe UI",
+    Roboto,
+    sans-serif;
+  color: #0f172a;
+  background: #fff;
+}
+
+button {
+  font-family: inherit;
+  cursor: pointer;
+}
+
+.app-shell {
+  display: flex;
+  height: 100vh;
+  flex-direction: column;
+}
+
+.app-body {
+  display: flex;
+  min-height: 0;
+  flex: 1;
+}
+
+.app-main {
+  display: flex;
+  min-height: 0;
+  min-width: 0;
+  flex: 1;
+  flex-direction: column;
+}
+
+.thread-sidebar {
+  display: flex;
+  width: 18rem;
+  flex-shrink: 0;
+  flex-direction: column;
+  border-right: 1px solid #e2e8f0;
+  background: #f8fafc;
+  height: 100%;
+}
+
+.thread-sidebar-header {
+  border-bottom: 1px solid #e2e8f0;
+  padding: 1rem;
+}
+
+.thread-sidebar-title {
+  margin: 0 0 0.75rem;
+  font-size: 1rem;
+  font-weight: 600;
+}
+
+.thread-btn {
+  width: 100%;
+  border-radius: 0.5rem;
+  padding: 0.5rem 0.75rem;
+  font-size: 0.875rem;
+  border: 1px solid #cbd5e1;
+  background: #fff;
+}
+
+.thread-btn-primary {
+  font-weight: 500;
+}
+
+.thread-btn-ghost {
+  margin-top: 0.5rem;
+  border: none;
+  background: transparent;
+  color: #64748b;
+}
+
+.thread-list {
+  flex: 1;
+  overflow-y: auto;
+  padding: 0.5rem;
+}
+
+.thread-item {
+  width: 100%;
+  margin-bottom: 0.25rem;
+  border: none;
+  border-radius: 0.5rem;
+  padding: 0.625rem 0.75rem;
+  text-align: left;
+  font-size: 0.875rem;
+  background: transparent;
+  color: #334155;
+}
+
+.thread-item.active {
+  background: #e0f2fe;
+  color: #0c4a6e;
+}
+
+.thread-item-name {
+  font-weight: 500;
+}
+
+.thread-item-id {
+  margin-top: 0.125rem;
+  font-size: 0.6875rem;
+  color: #94a3b8;
+}
+
+.layout-switcher {
+  display: flex;
+  align-items: center;
+  gap: 0.25rem;
+  border-bottom: 1px solid #e2e8f0;
+  background: #fff;
+  padding: 0.5rem 1rem;
+}
+
+.layout-switcher-label {
+  margin-right: 0.5rem;
+  font-size: 0.75rem;
+  font-weight: 500;
+  color: #64748b;
+}
+
+.layout-btn {
+  border: none;
+  border-radius: 0.5rem;
+  padding: 0.375rem 0.75rem;
+  font-size: 0.875rem;
+  background: transparent;
+  color: #475569;
+}
+
+.layout-btn.active {
+  background: #e0f2fe;
+  font-weight: 500;
+  color: #075985;
+}
+
+.chat-panel {
+  display: flex;
+  min-height: 0;
+  flex: 1;
+  flex-direction: column;
+  background: #fff;
+}
+
+.chat-header {
+  border-bottom: 1px solid #e2e8f0;
+  padding: 0.75rem 1.25rem;
+}
+
+.chat-header h1 {
+  margin: 0;
+  font-size: 1.125rem;
+  font-weight: 600;
+}
+
+.chat-header p {
+  margin: 0.25rem 0 0;
+  font-size: 0.875rem;
+  color: #64748b;
+}
+
+.chat-content {
+  min-height: 0;
+  flex: 1;
+}
+
+.main-preview {
+  display: flex;
+  flex: 1;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  padding: 2rem;
+  background: linear-gradient(135deg, #f8fafc 0%, #e0f2fe 100%);
+}
+
+.weather-card {
+  margin: 0.5rem 0;
+  max-width: 20rem;
+  border-radius: 0.75rem;
+  border: 1px solid #bae6fd;
+  background: linear-gradient(135deg, #f0f9ff 0%, #e0f2fe 100%);
+  padding: 1rem;
+}
+
+.weather-card-city {
+  font-size: 1.125rem;
+  font-weight: 600;
+}
+
+.weather-card-temp {
+  margin-top: 0.25rem;
+  font-size: 1.875rem;
+  font-weight: 700;
+}
+
+.weather-card-meta {
+  margin-top: 0.75rem;
+  display: flex;
+  gap: 1rem;
+  font-size: 0.75rem;
+  color: #475569;
+}
+
+.muted {
+  color: #64748b;
+  font-size: 0.875rem;
+}
+
+.error {
+  color: #dc2626;
+  font-size: 0.875rem;
+}
