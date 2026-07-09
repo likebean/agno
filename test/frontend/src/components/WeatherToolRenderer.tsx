@@ -14,6 +14,13 @@ type WeatherResult = {
   humidity: number;
   wind_speed: number;
   conditions: string;
+  _mock?: {
+    mock: boolean;
+    location_requested: string;
+    run_id: string;
+    session_id: string;
+    dependency_keys: string[];
+  };
 };
 
 function parseWeatherResult(result: string | undefined): WeatherResult | null {
@@ -45,6 +52,9 @@ function WeatherCard({ data }: { data: WeatherResult }) {
         <span>湿度 {data.humidity}%</span>
         <span>风速 {data.wind_speed} km/h</span>
       </div>
+      {data._mock ? (
+        <pre className="mock-panel">{JSON.stringify(data._mock, null, 2)}</pre>
+      ) : null}
     </div>
   );
 }

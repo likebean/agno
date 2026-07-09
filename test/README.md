@@ -10,6 +10,7 @@ CopilotKit 最佳实践 + Agno 后端 `get_weather`，支持历史 thread 中 to
 | [Threads](https://docs.copilotkit.ai/agno/threads) | 受控 `threadId`；自托管用 AgentOS session 桥接（见下） |
 | [Slots](https://docs.copilotkit.ai/agno/custom-look-and-feel/slots) | `messageView` / `input` / `children` render function |
 | [Tool Rendering](https://docs.copilotkit.ai/agno/generative-ui/tool-rendering) | `useRenderTool({ name: "get_weather" })` |
+| Mock 标记位 | `useAgentContext({ description: "mock", value })` → AG-UI `context` → Agno `dependencies` → tool `run_context` |
 
 ### Threads 说明
 
@@ -34,13 +35,12 @@ test/
     │   ├── CopilotLayouts.tsx   # Chat / Sidebar / Popup 三模式
     │   ├── LayoutModeSwitcher.tsx
     │   ├── ThreadSidebar.tsx    # Thread 列表
+    │   ├── MockContextToggle.tsx  # Mock 开关 → AG-UI context
     │   └── WeatherToolRenderer.tsx
     └── src/hooks/useAgentOsThreads.ts
 ```
 
 ## 启动
-
-**前置：** 本机 MySQL 已有 `agent_platform` 库（默认 `root` / 见 `backend/.env.example`）
 
 复制 `backend/.env.example` 为 `backend/.env`，配置 DashScope：
 
@@ -50,8 +50,21 @@ AI_MODEL_API_URL=https://dashscope.aliyuncs.com/compatible-mode/v1
 AI_MODEL_API_KEY=sk-...
 ```
 
+数据库：
+- Agent/Session：`test/backend/tmp/agent_platform.db`（SQLite）
+- Knowledge 元数据：`test/backend/tmp/knowledge_contents.db`（SQLite，`contents_db`）
+- 向量检索：PgVector on `postgresql+psycopg://ai@localhost:5532/ai`
+
+**PgVector 前置（本机 PostgreSQL 17 + pgvector，端口 5532）：**
 ```bash
-mysql -u root -p -e "CREATE DATABASE IF NOT EXISTS agent_platform;"
+# 若 5532 未启动，可用项目内数据目录启动：
+PG17=/opt/homebrew/opt/postgresql@17/bin
+PGDATA=test/backend/tmp/pgvector-data
+mkdir -p "$PGDATA"
+[ -f "$PGDATA/PG_VERSION" ] || "$PG17/initdb" -D "$PGDATA" -U ai -A trust --encoding=UTF8 --locale=C
+"$PG17/pg_ctl" -D "$PGDATA" -o "-p 5532" -l test/backend/tmp/pgvector.log start
+"$PG17/psql" -h localhost -p 5532 -U ai -d postgres -c "CREATE DATABASE ai;" || true
+"$PG17/psql" -h localhost -p 5532 -U ai -d ai -c "CREATE EXTENSION IF NOT EXISTS vector;"
 ```
 
 **后端：**
@@ -59,7 +72,7 @@ mysql -u root -p -e "CREATE DATABASE IF NOT EXISTS agent_platform;"
 .venvs/demo/bin/python test/backend/main.py
 ```
 
-数据库连接：`mysql+pymysql://root@localhost:3306/agent_platform`（可用 `MYSQL_*` 环境变量覆盖）
+数据库：SQLite（sessions/components）+ PgVector（向量）；支持 [os.agno.com Knowledge](https://docs.agno.com/agent-os/features/knowledge-management) 页面上传文件
 
 **前端：**
 ```bash

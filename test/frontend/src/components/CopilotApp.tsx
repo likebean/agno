@@ -7,6 +7,7 @@ import {
   type LayoutMode,
 } from "@/components/LayoutModeSwitcher";
 import { ThreadSidebar } from "@/components/ThreadSidebar";
+import { MockContextToggle } from "@/components/MockContextToggle";
 import { WeatherToolRenderer } from "@/components/WeatherToolRenderer";
 import { COPILOT_AGENT_ID } from "@/lib/config";
 import { useEffect, useState } from "react";
@@ -35,7 +36,10 @@ export function CopilotApp() {
     >
       <WeatherToolRenderer />
       <div className="app-shell">
-        <LayoutModeSwitcher mode={layoutMode} onChange={setLayoutMode} />
+        <div className="app-toolbar">
+          <LayoutModeSwitcher mode={layoutMode} onChange={setLayoutMode} />
+          <MockContextToggle />
+        </div>
         <div className="app-body">
           <ThreadSidebar threadId={threadId} setThreadId={setThreadId} />
           <div className="app-main">
