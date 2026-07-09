@@ -16,7 +16,10 @@ Endpoints:
     GET  /registry          — Studio: list models, tools, dbs
 """
 
+import asyncio
+import json
 import os
+from contextlib import asynccontextmanager
 from pathlib import Path
 
 from agno.agent.agent import Agent
@@ -30,6 +33,7 @@ from agno.os.interfaces.agui import AGUI
 from agno.registry import Registry
 from agno.run import RunContext
 from agno.tools import tool
+from agno.tools.function import Function
 from agno.vectordb.pgvector import PgVector, SearchType
 from agno.workflow.types import StepInput, StepOutput
 
@@ -181,6 +185,35 @@ def get_weather(location: str, run_context: RunContext) -> dict:
     return result
 
 
+# --- DB tool sync: fixed tools (code) + dynamic tools (console DB) ---
+FIXED_TOOLS = [get_weather]
+DB_TOOLS_FILE = DB_DIR / "db_tools.json"
+TOOL_SYNC_INTERVAL = int(os.getenv("TOOL_SYNC_INTERVAL", "30"))
+
+
+def read_db_tool_names() -> list[str]:
+    """Read enabled tool names from console DB. Demo uses a JSON file."""
+    if not DB_TOOLS_FILE.exists():
+        return []
+    data = json.loads(DB_TOOLS_FILE.read_text())
+    return [name for name in data.get("tool_names", []) if name]
+
+
+def sync_registry_tools(registry: Registry) -> list[str]:
+    """Merge fixed tools with DB tools. Updates GET /registry and runtime rehydrate."""
+    db_tools = []
+    for name in read_db_tool_names():
+        def _entrypoint(query: str, _name=name) -> str:
+            return f"{_name}:{query}"
+
+        _entrypoint.__name__ = name
+        db_tools.append(Function(name=name, entrypoint=_entrypoint))
+
+    registry.tools = list(FIXED_TOOLS) + db_tools
+    registry.__dict__.pop("_entrypoint_lookup", None)
+    return [t.name for t in registry.tools]
+
+
 def transform_content(step_input: StepInput) -> StepOutput:
     """Studio Custom Executor demo: uppercase the previous step output."""
     text = step_input.previous_step_content or step_input.input or ""
@@ -202,7 +235,7 @@ def is_tech_topic(step_input: StepInput) -> bool:
 registry = Registry(
     name="Weather Demo Registry",
     models=models,
-    tools=[get_weather],
+    tools=list(FIXED_TOOLS),
     functions=[transform_content, is_tech_topic],
     dbs=[db, contents_db],
     knowledge=[demo_knowledge],
@@ -237,6 +270,28 @@ Search knowledge before answering. Cite the source when possible.""",
     markdown=True,
 )
 
+
+@asynccontextmanager
+async def lifespan(app, agent_os):
+    names = sync_registry_tools(agent_os.registry)
+    print(f"Registry tools: {names}")
+
+    async def _periodic_sync() -> None:
+        while True:
+            await asyncio.sleep(TOOL_SYNC_INTERVAL)
+            try:
+                names = sync_registry_tools(agent_os.registry)
+                print(f"Registry tools re-synced: {names}")
+            except Exception as exc:
+                print(f"Tool sync failed: {exc}")
+
+    task = asyncio.create_task(_periodic_sync())
+    try:
+        yield
+    finally:
+        task.cancel()
+
+
 agent_os = AgentOS(
     description="Tool Rendering weather demo for CopilotKit",
     agents=[weather_agent, knowledge_agent],
@@ -245,6 +300,7 @@ agent_os = AgentOS(
     knowledge=[demo_knowledge],
     config=AgentOSConfig(available_models=AI_MODEL_IDS),
     interfaces=[AGUI(agent=weather_agent)],
+    lifespan=lifespan,
     # Include os.agno.com so AgentOS Studio can reach this local instance.
     # Custom origins override AgentOS defaults, so list them explicitly.
     cors_allowed_origins=[
@@ -272,5 +328,6 @@ if __name__ == "__main__":
     print("  Knowledge: https://os.agno.com (sidebar -> Knowledge)")
     print("  Studio:   https://os.agno.com/studio/workflows/create")
     print("  Functions: transform_content, is_tech_topic")
+    print(f"  DB tools:  {DB_TOOLS_FILE} (edit tool_names, sync every {TOOL_SYNC_INTERVAL}s)")
     print("  Sessions: http://localhost:8000/sessions?type=agent&component_id=weather-agent&db_id=<db_id>")
     agent_os.serve(app="main:app", host="0.0.0.0", port=8000, reload=True)
