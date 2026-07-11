@@ -3,28 +3,29 @@ import {
   ExperimentalEmptyAdapter,
   copilotRuntimeNextJSAppRouterEndpoint,
 } from "@copilotkit/runtime";
-import { AgnoAgent } from "@ag-ui/agno";
+import { BuiltInAgent } from "@copilotkit/runtime/v2";
 import { NextRequest } from "next/server";
-import {
-  AGENTOS_URL,
-  COPILOT_AGENT_ID,
-  MCP_QR_SERVER_URL,
-} from "@/lib/config";
+
+const MCP_QR_SERVER_URL =
+  process.env.MCP_QR_SERVER_URL ?? "http://localhost:3108/mcp";
+
+const MODEL =
+  process.env.COPILOT_MODEL ?? "openai/gpt-4.1-mini";
+
+const agent = new BuiltInAgent({
+  model: MODEL,
+  prompt: `You are a helpful assistant that can generate QR codes.
+
+When the user asks for a QR code (URL, text, WiFi, etc.), call the generate_qr tool.
+Prefer generate_qr over describing the QR in text.
+You may set fill_color / back_color when the user asks for styling.`,
+});
 
 const serviceAdapter = new ExperimentalEmptyAdapter();
 
-/**
- * Agent 在 Agno（AGENTOS_URL/agui）统一管理。
- * MCP Apps 由 Copilot Runtime 的 mcpApps 中间件对接：
- * 发现 MCP tool / 代理 UI resource / 聊天内 iframe 渲染。
- * @see https://learn.microsoft.com/en-us/agent-framework/integrations/ag-ui/mcp-apps
- * @see https://docs.copilotkit.ai/agno/generative-ui/mcp-apps
- */
 const runtime = new CopilotRuntime({
   agents: {
-    [COPILOT_AGENT_ID]: new AgnoAgent({
-      url: `${AGENTOS_URL}/agui`,
-    }),
+    default: agent,
   },
   mcpApps: {
     servers: [

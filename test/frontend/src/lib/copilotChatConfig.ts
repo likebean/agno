@@ -8,10 +8,11 @@ export function getCopilotChatProps(threadId: string): CopilotChatProps {
     threadId,
     labels: {
       welcomeMessageText:
-        "问我任何城市的天气，例如：San Francisco、Tokyo、London",
-      chatInputPlaceholder: "输入城市名查询天气...",
-      chatDisclaimerText: "由 Agno Agent 提供，tool 结果以卡片形式渲染。",
-      modalHeaderTitle: "Weather Agent",
+        "可以查天气（Tokyo），也可以生成二维码（例如：帮我生成 https://docs.agno.com 的二维码）",
+      chatInputPlaceholder: "查天气或生成二维码...",
+      chatDisclaimerText:
+        "Agent 在 Agno；天气用 useRenderTool；二维码 UI 由 MCP Apps 自动渲染。",
+      modalHeaderTitle: "Weather + MCP Apps",
     },
     input: {
       textArea: "min-h-[44px] resize-none rounded-xl border-slate-300",

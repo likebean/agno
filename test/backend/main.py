@@ -249,10 +249,14 @@ weather_agent = Agent(
     tools=[get_weather],
     add_history_to_context=True,
     num_history_runs=5,
-    instructions="""You help users check weather. When asked about weather, always use the get_weather tool.
+    instructions="""You help users check weather and related assistant tasks.
 
+When asked about weather, always use the get_weather tool.
 The tool returns structured data that the frontend will render as a weather card.
-Keep your text replies brief after the tool runs.""",
+
+When asked for a QR code, use the generate_qr tool if it is available in this run
+(provided by CopilotKit MCP Apps via AG-UI client_tools). Pass the content in text.
+Keep text replies brief after tools run.""",
     markdown=True,
 )
 
