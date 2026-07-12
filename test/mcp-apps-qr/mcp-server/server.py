@@ -315,6 +315,22 @@ def generate_qr(
     ]
 
 
+@mcp.tool()
+def echo_text(message: str, uppercase: bool = False) -> str:
+    """Echo text back from the MCP server (no UI resource).
+
+    Use this for plain backend-style MCP tools that should run on Agno,
+    not CopilotKit MCP Apps.
+
+    Args:
+        message: Text to echo
+        uppercase: If true, return the message uppercased
+    """
+    result = message.upper() if uppercase else message
+    print(f"[echo_text] message={message!r} uppercase={uppercase} -> {result!r}")
+    return result
+
+
 # IMPORTANT: all the external domains used by app must be listed
 # in the meta.ui.csp.resourceDomains - otherwise they will be blocked by CSP policy
 @mcp.resource(

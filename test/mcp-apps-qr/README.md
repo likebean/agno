@@ -1,13 +1,13 @@
 # QR Code MCP Apps Server
 
-仅提供 MCP Server（`generate_qr` tool + UI resource）。
+MCP Server tools：
 
-**Chat UI / Agent 不在这里。** 请接到原来的天气 Chat：
+| Tool | UI (`ui/resourceUri`) | 用途 |
+|------|----------------------|------|
+| `generate_qr` | 有 | CopilotKit MCP Apps / iframe |
+| `echo_text` | 无 | Agno 侧普通 MCP tool |
 
-- Agent：`test/backend`（Agno）
-- Chat + `mcpApps` 注册：`test/frontend/src/app/api/copilotkit/route.ts`
-
-详见 [test/README.md](../README.md)。
+在 **agent-platform Admin** 注册该 MCP，并把两个 tool 勾到同一个 Agent 上验证分流（不必改 `test/backend/main.py`）。
 
 ## 启动
 
@@ -16,8 +16,12 @@ uv run server.py
 # → QR Code Server listening on http://0.0.0.0:3108/mcp
 ```
 
+自检：
+
+```bash
+.venvs/demo/bin/python test/mcp-apps-qr/verify_tool_split.py
+```
+
+详见 [test/README.md](../README.md)。
+
 基于 [modelcontextprotocol/ext-apps qr-server](https://github.com/modelcontextprotocol/ext-apps/tree/main/examples/qr-server)。
-
-## 说明
-
-`frontend/` 目录是早期独立 CopilotKit BuiltInAgent demo，已废弃，请勿再当作主入口。
