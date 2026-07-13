@@ -17,6 +17,8 @@ from mcp.client.streamable_http import streamablehttp_client
 
 MCP_URL = os.getenv("MCP_QR_SERVER_URL", "http://127.0.0.1:3108/mcp")
 UI_TOOL = "generate_qr"
+BOOKING_UI_TOOL = "open_booking_form"
+BOOKING_CONFIRM_TOOL = "confirm_booking"
 BACKEND_TOOL = "echo_text"
 
 
@@ -43,11 +45,19 @@ async def main() -> int:
                 listed = await session.list_tools()
                 by_name = {t.name: t for t in listed.tools}
                 assert UI_TOOL in by_name, f"missing {UI_TOOL}: {sorted(by_name)}"
+                assert BOOKING_UI_TOOL in by_name, f"missing {BOOKING_UI_TOOL}: {sorted(by_name)}"
+                assert BOOKING_CONFIRM_TOOL in by_name, f"missing {BOOKING_CONFIRM_TOOL}: {sorted(by_name)}"
                 assert BACKEND_TOOL in by_name, f"missing {BACKEND_TOOL}: {sorted(by_name)}"
                 assert _has_ui_meta(by_name[UI_TOOL]), f"{UI_TOOL} should have UI meta"
+                assert _has_ui_meta(by_name[BOOKING_UI_TOOL]), f"{BOOKING_UI_TOOL} should have UI meta"
+                assert not _has_ui_meta(by_name[BOOKING_CONFIRM_TOOL]), (
+                    f"{BOOKING_CONFIRM_TOOL} must not have UI meta (called from form)"
+                )
                 assert not _has_ui_meta(by_name[BACKEND_TOOL]), f"{BACKEND_TOOL} must not have UI meta"
                 print(f"OK tools={sorted(by_name)}")
                 print(f"  {UI_TOOL}: UI meta present (for CopilotKit)")
+                print(f"  {BOOKING_UI_TOOL}: UI meta present (form + confirm)")
+                print(f"  {BOOKING_CONFIRM_TOOL}: no UI meta (iframe tools/call)")
                 print(f"  {BACKEND_TOOL}: no UI meta (for Agno after Admin select)")
     except Exception as exc:
         print(f"FAIL: {exc}", file=sys.stderr)
