@@ -61,7 +61,7 @@ EMBEDDED_VIEW_HTML = """<!DOCTYPE html>
     html, body {
       margin: 0;
       padding: 0;
-      background: var(--bg);
+      background: transparent;
       color: var(--text);
       font: 13px/1.45 system-ui, sans-serif;
     }
@@ -395,7 +395,7 @@ EMBEDDED_BOOKING_FORM_HTML = """<!DOCTYPE html>
     * { box-sizing: border-box; }
     html, body {
       margin: 0; padding: 0;
-      background: var(--bg); color: var(--text);
+      background: transparent; color: var(--text);
       font: 13px/1.45 system-ui, sans-serif;
     }
     body { width: 380px; padding: 12px; }
