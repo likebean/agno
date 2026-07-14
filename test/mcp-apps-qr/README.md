@@ -4,7 +4,7 @@ MCP Server tools：
 
 | Tool | UI (`ui/resourceUri`) | 用途 |
 |------|----------------------|------|
-| `generate_qr` | 有 | CopilotKit MCP Apps / iframe（二维码） |
+| `generate_qr` | 有 | iframe 二维码；PNG 落盘，`tool` 结果 JSON 含 `image_url` |
 | `open_booking_form` | 有 | 表单 + 确认（对标 [CK showcase](https://github.com/CopilotKit/CopilotKit/tree/main/examples/showcases/mcp-apps)） |
 | `confirm_booking` | 无 | 由表单 iframe 经 Host `tools/call` 提交 |
 | `echo_text` | 无 | Agno 侧普通 MCP tool |
@@ -18,7 +18,13 @@ MCP Server tools：
 ```bash
 uv run server.py
 # → QR Code Server listening on http://0.0.0.0:3108/mcp
+# → QR images at http://127.0.0.1:3108/qr/
 ```
+
+可选环境变量：
+
+- `QR_PUBLIC_BASE_URL`（默认 `http://127.0.0.1:$PORT`）— 写入 `image_url` 的主机
+- `QR_IMAGE_DIR`（默认系统临时目录下 `mcp-apps-qr`）— PNG 存放目录
 
 自检：
 

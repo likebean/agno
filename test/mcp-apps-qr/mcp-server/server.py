@@ -11,23 +11,33 @@
 """
 QR Code MCP Server - Generates QR codes from text
 
-Demo for CopilotKit MCP Apps (test/mcp-apps-qr). Default port 3108 matches CopilotKit docs.
+Demo for MCP Apps (test/mcp-apps-qr). Default port 3108.
+
+generate_qr writes PNGs to disk and returns an HTTP image_url in text JSON
+(no ImageContent base64), so Agno tool.result stays small and hydrate-friendly.
 """
+import json
 import os
 import sys
 import io
-import base64
+import tempfile
+import uuid
+from pathlib import Path
 
 import qrcode
 import uvicorn
 from mcp.server.fastmcp import FastMCP
 from mcp import types
 from starlette.middleware.cors import CORSMiddleware
+from starlette.staticfiles import StaticFiles
 
 VIEW_URI = "ui://qr-server/view.html"
 BOOKING_VIEW_URI = "ui://qr-server/booking-form.html"
 HOST = os.environ.get("HOST", "0.0.0.0")  # 0.0.0.0 for Docker compatibility
 PORT = int(os.environ.get("PORT", "3108"))
+PUBLIC_BASE = os.environ.get("QR_PUBLIC_BASE_URL", f"http://127.0.0.1:{PORT}").rstrip("/")
+IMAGE_DIR = Path(os.environ.get("QR_IMAGE_DIR", str(Path(tempfile.gettempdir()) / "mcp-apps-qr")))
+IMAGE_DIR.mkdir(parents=True, exist_ok=True)
 
 mcp = FastMCP("QR Code Server", stateless_http=True, host=HOST, port=PORT)
 
@@ -147,7 +157,7 @@ EMBEDDED_VIEW_HTML = """<!DOCTYPE html>
     import { App } from "https://unpkg.com/@modelcontextprotocol/ext-apps@0.4.0/app-with-deps";
 
     const app = new App({ name: "QR View", version: "1.1.0" });
-    let current = { mimeType: "image/png", data: "", text: "", serverAt: "" };
+    let current = { mimeType: "image/png", imageUrl: "", data: "", text: "", serverAt: "" };
     let clicks = 0;
 
     const preview = document.getElementById("preview");
@@ -166,13 +176,34 @@ EMBEDDED_VIEW_HTML = """<!DOCTYPE html>
       for (const b of buttons) b.disabled = !on;
     }
 
+    function parseMeta(payload) {
+      if (payload == null) return {};
+      if (typeof payload === "string") {
+        try { return JSON.parse(payload); } catch (_) { return { text: payload }; }
+      }
+      if (typeof payload !== "object") return {};
+      if (Array.isArray(payload.content)) {
+        const textPart = payload.content.find((c) => c?.type === "text");
+        if (textPart?.text) {
+          try { return JSON.parse(textPart.text); } catch (_) { return { text: textPart.text }; }
+        }
+      }
+      return payload;
+    }
+
     function renderImage() {
+      const src = current.imageUrl || (current.data ? `data:${current.mimeType};base64,${current.data}` : "");
+      if (!src) {
+        status.textContent = "No image_url in tool result.";
+        return;
+      }
       preview.innerHTML = "";
       const image = document.createElement("img");
-      image.src = `data:${current.mimeType};base64,${current.data}`;
+      image.src = src;
       image.alt = "QR Code";
       preview.appendChild(image);
       meta.innerHTML = `<strong>Encoded:</strong> ${escapeHtml(current.text || "(unknown)")}<br/>`
+        + `<strong>Image URL:</strong> ${escapeHtml(current.imageUrl || "(inline)")}<br/>`
         + `<strong>Server generated at:</strong> ${escapeHtml(current.serverAt || "(n/a)")}<br/>`
         + `<strong>Client rendered at:</strong> ${new Date().toLocaleTimeString()}`;
       setEnabled(true);
@@ -190,21 +221,21 @@ EMBEDDED_VIEW_HTML = """<!DOCTYPE html>
         .replaceAll('"', "&quot;");
     }
 
-    app.ontoolresult = ({ content }) => {
-      const img = content?.find(c => c.type === "image");
-      const textPart = content?.find(c => c.type === "text");
-      let metaObj = {};
-      if (textPart?.text) {
-        try { metaObj = JSON.parse(textPart.text); } catch (_) { metaObj = { text: textPart.text }; }
-      }
-      if (!img) {
-        status.textContent = "No image in tool result.";
+    app.ontoolresult = (result) => {
+      const metaObj = parseMeta(result);
+      const imageUrl = metaObj.image_url || metaObj.imageUrl || "";
+      const img = Array.isArray(result?.content)
+        ? result.content.find((c) => c?.type === "image")
+        : null;
+      if (!imageUrl && !img?.data) {
+        status.textContent = "No image_url in tool result.";
         return;
       }
       const allowed = ["image/png", "image/jpeg", "image/gif"];
       current = {
-        mimeType: allowed.includes(img.mimeType) ? img.mimeType : "image/png",
-        data: img.data,
+        mimeType: allowed.includes(img?.mimeType) ? img.mimeType : (metaObj.mime_type || "image/png"),
+        imageUrl,
+        data: img?.data || "",
         text: metaObj.text || metaObj.url || "",
         serverAt: metaObj.generated_at || "",
       };
@@ -213,10 +244,13 @@ EMBEDDED_VIEW_HTML = """<!DOCTYPE html>
     };
 
     document.getElementById("btn-download").onclick = () => {
-      if (!current.data) return;
+      const href = current.imageUrl || (current.data ? `data:${current.mimeType};base64,${current.data}` : "");
+      if (!href) return;
       const a = document.createElement("a");
-      a.href = `data:${current.mimeType};base64,${current.data}`;
+      a.href = href;
       a.download = "qr-code.png";
+      a.target = "_blank";
+      a.rel = "noopener";
       a.click();
       bump("Downloaded PNG from client UI.");
     };
@@ -273,6 +307,8 @@ def generate_qr(
 ) -> list:
     """Generate a QR code from text.
 
+    Writes PNG to disk and returns JSON text with image_url (no base64 ImageContent).
+
     Args:
         text: The text/URL to encode
         box_size: Size of each box in pixels (default: 10)
@@ -302,11 +338,16 @@ def generate_qr(
     img = qr.make_image(fill_color=fill_color, back_color=back_color)
     buffer = io.BytesIO()
     img.save(buffer, format="PNG")
-    b64 = base64.b64encode(buffer.getvalue()).decode()
+    file_id = uuid.uuid4().hex
+    path = IMAGE_DIR / f"{file_id}.png"
+    path.write_bytes(buffer.getvalue())
+    image_url = f"{PUBLIC_BASE}/qr/{file_id}.png"
     generated_at = datetime.now(timezone.utc).isoformat()
-    print(f"[generate_qr] text={text!r} generated_at={generated_at}")
+    print(f"[generate_qr] text={text!r} image_url={image_url} generated_at={generated_at}")
     meta = {
         "text": text,
+        "image_url": image_url,
+        "mime_type": "image/png",
         "fill_color": fill_color,
         "back_color": back_color,
         "error_correction": error_correction,
@@ -314,8 +355,7 @@ def generate_qr(
         "source": "mcp-apps-qr-server",
     }
     return [
-        types.TextContent(type="text", text=__import__("json").dumps(meta)),
-        types.ImageContent(type="image", data=b64, mimeType="image/png"),
+        types.TextContent(type="text", text=json.dumps(meta, ensure_ascii=False)),
     ]
 
 
@@ -671,10 +711,18 @@ def confirm_booking(
 
 # IMPORTANT: all the external domains used by app must be listed
 # in the meta.ui.csp.resourceDomains - otherwise they will be blocked by CSP policy
+_VIEW_CSP_DOMAINS = [
+    "https://unpkg.com",
+    PUBLIC_BASE,
+    f"http://127.0.0.1:{PORT}",
+    f"http://localhost:{PORT}",
+]
+
+
 @mcp.resource(
     VIEW_URI,
     mime_type="text/html;profile=mcp-app",
-    meta={"ui": {"csp": {"resourceDomains": ["https://unpkg.com"]}}},
+    meta={"ui": {"csp": {"resourceDomains": _VIEW_CSP_DOMAINS}}},
 )
 def view() -> str:
     """View HTML resource with CSP metadata for external dependencies."""
@@ -696,8 +744,9 @@ if __name__ == "__main__":
         # Claude Desktop mode
         mcp.run(transport="stdio")
     else:
-        # HTTP mode for basic-host (default) - with CORS
+        # HTTP mode for basic-host (default) - with CORS + /qr static PNGs
         app = mcp.streamable_http_app()
+        app.mount("/qr", StaticFiles(directory=str(IMAGE_DIR)), name="qr")
         app.add_middleware(
             CORSMiddleware,
             allow_origins=["*"],
@@ -705,4 +754,5 @@ if __name__ == "__main__":
             allow_headers=["*"],
         )
         print(f"QR Code Server listening on http://{HOST}:{PORT}/mcp")
+        print(f"QR images at {PUBLIC_BASE}/qr/ (dir={IMAGE_DIR})")
         uvicorn.run(app, host=HOST, port=PORT)

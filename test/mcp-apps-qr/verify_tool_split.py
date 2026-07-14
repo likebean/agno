@@ -54,8 +54,22 @@ async def main() -> int:
                     f"{BOOKING_CONFIRM_TOOL} must not have UI meta (called from form)"
                 )
                 assert not _has_ui_meta(by_name[BACKEND_TOOL]), f"{BACKEND_TOOL} must not have UI meta"
+
+                result = await session.call_tool(UI_TOOL, {"text": "verify-image-url"})
+                content = getattr(result, "content", None) or []
+                text_blob = ""
+                for item in content:
+                    if getattr(item, "type", None) == "text" or item.__class__.__name__ == "TextContent":
+                        text_blob = getattr(item, "text", "") or ""
+                        break
+                assert "image_url" in text_blob, f"{UI_TOOL} should return image_url JSON, got {text_blob!r}"
+                assert not any(
+                    getattr(item, "type", None) == "image" or item.__class__.__name__ == "ImageContent"
+                    for item in content
+                ), f"{UI_TOOL} must not return ImageContent base64"
+
                 print(f"OK tools={sorted(by_name)}")
-                print(f"  {UI_TOOL}: UI meta present (for CopilotKit)")
+                print(f"  {UI_TOOL}: UI meta + image_url text result")
                 print(f"  {BOOKING_UI_TOOL}: UI meta present (form + confirm)")
                 print(f"  {BOOKING_CONFIRM_TOOL}: no UI meta (iframe tools/call)")
                 print(f"  {BACKEND_TOOL}: no UI meta (for Agno after Admin select)")
