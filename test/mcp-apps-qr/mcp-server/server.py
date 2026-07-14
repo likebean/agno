@@ -478,6 +478,7 @@ EMBEDDED_BOOKING_FORM_HTML = """<!DOCTYPE html>
 
     const app = new App({ name: "Booking Form", version: "1.0.0" });
     let lastBooking = null;
+    let confirmed = false;
 
     const $ = (id) => document.getElementById(id);
     const formStep = $("form-step");
@@ -485,6 +486,7 @@ EMBEDDED_BOOKING_FORM_HTML = """<!DOCTYPE html>
     const errEl = $("form-err");
 
     function showForm() {
+      confirmed = false;
       doneStep.classList.add("hidden");
       formStep.classList.remove("hidden");
       errEl.textContent = "";
@@ -493,6 +495,7 @@ EMBEDDED_BOOKING_FORM_HTML = """<!DOCTYPE html>
 
     function showDone(booking) {
       lastBooking = booking;
+      confirmed = true;
       formStep.classList.add("hidden");
       doneStep.classList.remove("hidden");
       $("conf-code").textContent = booking.confirmation_number;
@@ -541,7 +544,12 @@ EMBEDDED_BOOKING_FORM_HTML = """<!DOCTYPE html>
     };
 
     app.ontoolresult = (result) => {
+      if (confirmed) return;
       const payload = parseToolPayload(result);
+      if (payload?.booking?.confirmation_number) {
+        showDone(payload.booking);
+        return;
+      }
       if (payload?.draft) applyDraft(payload.draft);
       else if (payload?.guest_name || payload?.item) applyDraft(payload);
       showForm();
@@ -585,11 +593,8 @@ EMBEDDED_BOOKING_FORM_HTML = """<!DOCTYPE html>
     $("btn-cancel").onclick = async () => {
       errEl.textContent = "Cancelled in the form UI.";
       try {
-        await app.sendMessage?.({
-          role: "user",
-          content: [{ type: "text", text: "I cancelled the booking form." }],
-          followUp: true,
-        });
+        // assistant-ui host extracts prompt|text|message only (not MCP content[])
+        await app.sendMessage?.({ text: "I cancelled the booking form." });
       } catch (_) {}
     };
 
@@ -597,13 +602,10 @@ EMBEDDED_BOOKING_FORM_HTML = """<!DOCTYPE html>
       if (!lastBooking) return;
       const msg = `Booking confirmed: ${lastBooking.confirmation_number} for ${lastBooking.guest_name} (${lastBooking.item_label || lastBooking.item}).`;
       try {
-        await app.sendMessage?.({
-          role: "user",
-          content: [{ type: "text", text: msg }],
-          followUp: true,
-        });
+        await app.sendMessage?.({ text: msg });
       } catch (e) {
         console.error("sendMessage failed", e);
+        errEl.textContent = e?.message || "Send to chat failed.";
       }
     };
 
