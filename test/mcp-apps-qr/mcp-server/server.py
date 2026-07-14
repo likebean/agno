@@ -64,10 +64,10 @@ EMBEDDED_VIEW_HTML = """<!DOCTYPE html>
       background: transparent;
       color: var(--text);
       font: 13px/1.45 system-ui, sans-serif;
+      overflow: hidden;
     }
     body {
       width: 360px;
-      min-height: 480px;
       padding: 12px;
     }
     .card {
@@ -201,6 +201,7 @@ EMBEDDED_VIEW_HTML = """<!DOCTYPE html>
       const image = document.createElement("img");
       image.src = src;
       image.alt = "QR Code";
+      image.onload = () => notifySize();
       preview.appendChild(image);
       meta.innerHTML = `<strong>Encoded:</strong> ${escapeHtml(current.text || "(unknown)")}<br/>`
         + `<strong>Image URL:</strong> ${escapeHtml(current.imageUrl || "(inline)")}<br/>`
@@ -208,6 +209,10 @@ EMBEDDED_VIEW_HTML = """<!DOCTYPE html>
         + `<strong>Client rendered at:</strong> ${new Date().toLocaleTimeString()}`;
       setEnabled(true);
       bump("QR received from MCP server — client UI rendered it.");
+      notifySize();
+    }
+
+    function notifySize() {
       try {
         app.notifySizeChanged?.({ height: document.body.scrollHeight });
       } catch (_) {}
@@ -288,6 +293,7 @@ EMBEDDED_VIEW_HTML = """<!DOCTYPE html>
     await app.connect();
     const ctx = app.getHostContext();
     if (ctx) handleHostContextChanged(ctx);
+    notifySize();
   </script>
 </body>
 </html>"""
@@ -397,6 +403,7 @@ EMBEDDED_BOOKING_FORM_HTML = """<!DOCTYPE html>
       margin: 0; padding: 0;
       background: transparent; color: var(--text);
       font: 13px/1.45 system-ui, sans-serif;
+      overflow: hidden;
     }
     body { width: 380px; padding: 12px; }
     .card {
