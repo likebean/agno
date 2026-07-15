@@ -21,8 +21,10 @@ import json
 import os
 from contextlib import asynccontextmanager
 from pathlib import Path
+from textwrap import dedent
 
 from agno.agent.agent import Agent
+from agno.db.postgres import PostgresDb
 from agno.db.sqlite import SqliteDb
 from agno.knowledge.embedder.openai import OpenAIEmbedder
 from agno.knowledge.knowledge import Knowledge
@@ -64,17 +66,22 @@ AI_MODEL_IDS = [
     if model_id.strip()
 ]
 
-PGVECTOR_URL = os.getenv("PGVECTOR_URL", "postgresql+psycopg://ai@localhost:5532/ai")
+# Shared Postgres (agent-platform-postgres / pgvector). Override via .env.
+PGVECTOR_URL = os.getenv(
+    "PGVECTOR_URL", "postgresql+psycopg://ai:ai@localhost:5432/ai"
+)
 EMBEDDING_MODEL = os.getenv("EMBEDDING_MODEL", "text-embedding-v3")
 EMBEDDING_DIMENSIONS = int(os.getenv("EMBEDDING_DIMENSIONS", "1024"))
 
 sqlite_file = os.getenv("SQLITE_DB_FILE", str(DB_DIR / "agent_platform.db"))
-knowledge_contents_file = os.getenv(
-    "KNOWLEDGE_SQLITE_FILE", str(DB_DIR / "knowledge_contents.db")
-)
 
+# Sessions stay on SQLite; knowledge contents + vectors share the existing Postgres.
 db = SqliteDb(id="weather-demo-db", db_file=sqlite_file)
-contents_db = SqliteDb(id="knowledge-contents-db", db_file=knowledge_contents_file)
+contents_db = PostgresDb(
+    id="knowledge-contents-db",
+    db_url=PGVECTOR_URL,
+    knowledge_table="demo_knowledge_contents",
+)
 
 embedder = OpenAIEmbedder(
     id=EMBEDDING_MODEL,
@@ -85,7 +92,7 @@ embedder = OpenAIEmbedder(
 
 demo_knowledge = Knowledge(
     name="Demo Knowledge",
-    description="Upload files from os.agno.com Knowledge page",
+    description="Demo knowledge base backed by existing Postgres + pgvector",
     vector_db=PgVector(
         db_url=PGVECTOR_URL,
         table_name="demo_knowledge_vectors",
@@ -275,10 +282,36 @@ Search knowledge before answering. Cite the source when possible.""",
 )
 
 
+def seed_demo_knowledge() -> None:
+    """Insert a small FAQ so search_knowledge has something to retrieve."""
+    demo_knowledge.insert(
+        name="Demo FAQ",
+        text_content=dedent("""
+            What is this demo?
+            This AgentOS backend exposes a weather agent and a knowledge agent.
+
+            How does knowledge search work?
+            The knowledge-agent uses Agentic RAG (search_knowledge=True) to call
+            search_knowledge_base against Demo Knowledge in Postgres + pgvector.
+
+            How do I upload more documents?
+            Use the AgentOS Knowledge UI at https://os.agno.com (sidebar -> Knowledge)
+            or call the knowledge insert APIs on this server.
+        """).strip(),
+        skip_if_exists=True,
+    )
+
+
 @asynccontextmanager
 async def lifespan(app, agent_os):
     names = sync_registry_tools(agent_os.registry)
     print(f"Registry tools: {names}")
+
+    try:
+        await asyncio.to_thread(seed_demo_knowledge)
+        print("Knowledge seeded: Demo FAQ (skip_if_exists)")
+    except Exception as exc:
+        print(f"Knowledge seed failed: {exc}")
 
     async def _periodic_sync() -> None:
         while True:
@@ -326,10 +359,11 @@ if __name__ == "__main__":
     print(f"  Default:  {default_model.id}")
     print(f"  Models:   {', '.join(AI_MODEL_IDS)}")
     print(f"  SQLite:   {sqlite_file}")
-    print(f"  Contents: {knowledge_contents_file}")
+    print(f"  Contents: Postgres table demo_knowledge_contents")
     print(f"  PgVector: {PGVECTOR_URL}")
     print("  AG-UI:    http://localhost:8000/agui")
-    print("  Knowledge: https://os.agno.com (sidebar -> Knowledge)")
+    print("  Knowledge agent: knowledge-agent")
+    print("  Knowledge UI: https://os.agno.com (sidebar -> Knowledge)")
     print("  Studio:   https://os.agno.com/studio/workflows/create")
     print("  Functions: transform_content, is_tech_topic")
     print(f"  DB tools:  {DB_TOOLS_FILE} (edit tool_names, sync every {TOOL_SYNC_INTERVAL}s)")
