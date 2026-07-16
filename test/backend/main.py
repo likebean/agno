@@ -82,6 +82,11 @@ contents_db = PostgresDb(
     db_url=PGVECTOR_URL,
     knowledge_table="demo_knowledge_contents",
 )
+contents_db_1 = PostgresDb(
+    id="knowledge-contents-db-1",
+    db_url=PGVECTOR_URL,
+    knowledge_table="demo_knowledge1_contents",
+)
 
 embedder = OpenAIEmbedder(
     id=EMBEDDING_MODEL,
@@ -100,6 +105,18 @@ demo_knowledge = Knowledge(
         embedder=embedder,
     ),
     contents_db=contents_db,
+)
+
+demo_knowledge1 = Knowledge(
+    name="Demo Knowledge 1",
+    description="Second demo knowledge base backed by existing Postgres + pgvector",
+    vector_db=PgVector(
+        db_url=PGVECTOR_URL,
+        table_name="demo_knowledge1_vectors",
+        search_type=SearchType.hybrid,
+        embedder=embedder,
+    ),
+    contents_db=contents_db_1,
 )
 
 def make_dashscope_model(model_id: str) -> DashScope:
@@ -244,8 +261,8 @@ registry = Registry(
     models=models,
     tools=list(FIXED_TOOLS),
     functions=[transform_content, is_tech_topic],
-    dbs=[db, contents_db],
-    knowledge=[demo_knowledge],
+    dbs=[db, contents_db, contents_db_1],
+    knowledge=[demo_knowledge, demo_knowledge1],
 )
 
 weather_agent = Agent(
@@ -300,6 +317,17 @@ def seed_demo_knowledge() -> None:
         """).strip(),
         skip_if_exists=True,
     )
+    demo_knowledge1.insert(
+        name="Demo Knowledge 1 FAQ",
+        text_content=dedent("""
+            What is Demo Knowledge 1?
+            A second knowledge base registered alongside Demo Knowledge for multi-KB demos.
+
+            When should I use Demo Knowledge 1?
+            Use it to test selecting a different knowledge base in Studio / Registry.
+        """).strip(),
+        skip_if_exists=True,
+    )
 
 
 @asynccontextmanager
@@ -334,7 +362,7 @@ agent_os = AgentOS(
     agents=[weather_agent, knowledge_agent],
     db=db,
     registry=registry,
-    knowledge=[demo_knowledge],
+    knowledge=[demo_knowledge, demo_knowledge1],
     config=AgentOSConfig(available_models=AI_MODEL_IDS),
     interfaces=[AGUI(agent=weather_agent)],
     lifespan=lifespan,
@@ -359,9 +387,10 @@ if __name__ == "__main__":
     print(f"  Default:  {default_model.id}")
     print(f"  Models:   {', '.join(AI_MODEL_IDS)}")
     print(f"  SQLite:   {sqlite_file}")
-    print(f"  Contents: Postgres table demo_knowledge_contents")
+    print("  Contents: Postgres tables demo_knowledge_contents, demo_knowledge1_contents")
     print(f"  PgVector: {PGVECTOR_URL}")
     print("  AG-UI:    http://localhost:8000/agui")
+    print("  Knowledge: Demo Knowledge, Demo Knowledge 1")
     print("  Knowledge agent: knowledge-agent")
     print("  Knowledge UI: https://os.agno.com (sidebar -> Knowledge)")
     print("  Studio:   https://os.agno.com/studio/workflows/create")
