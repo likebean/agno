@@ -2,7 +2,8 @@
 Tool Rendering Weather Demo — Backend
 ======================================
 
-AgentOS server with a get_weather backend tool for CopilotKit useRenderTool.
+AgentOS server with a get_weather backend tool for CopilotKit useRenderTool,
+plus a multi-agent article workflow (Condition + Function).
 
 Run:
     .venvs/demo/bin/python test/backend/main.py
@@ -10,6 +11,7 @@ Run:
 Endpoints:
     POST /agui              — AG-UI (CopilotKit)
     GET  /agents            — agent list (for db_id)
+    GET  /workflows         — workflow list (article-workflow)
     GET  /sessions          — session list
     GET  /sessions/{id}/runs — chat history
     POST /components        — Studio: create agents/teams/workflows
@@ -37,7 +39,10 @@ from agno.run import RunContext
 from agno.tools import tool
 from agno.tools.function import Function
 from agno.vectordb.pgvector import PgVector, SearchType
+from agno.workflow.condition import Condition
+from agno.workflow.step import Step
 from agno.workflow.types import StepInput, StepOutput
+from agno.workflow.workflow import Workflow
 
 # Load .env from backend directory if present
 _env_file = Path(__file__).parent / ".env"
@@ -256,11 +261,30 @@ def is_tech_topic(step_input: StepInput) -> bool:
     return any(keyword in topic.lower() for keyword in keywords)
 
 
+def format_article(step_input: StepInput) -> StepOutput:
+    """Workflow function step: normalize writer output before the editor."""
+    topic = step_input.input or "untitled"
+    body = step_input.previous_step_content or ""
+    formatted = (
+        f"# Article Draft\n\n"
+        f"**Topic:** {topic}\n\n"
+        f"---\n\n"
+        f"{body}\n\n"
+        f"---\n"
+        f"_Formatted by format_article function step._"
+    )
+    return StepOutput(
+        step_name="FormatArticle",
+        content=formatted,
+        success=True,
+    )
+
+
 registry = Registry(
     name="Weather Demo Registry",
     models=models,
     tools=list(FIXED_TOOLS),
-    functions=[transform_content, is_tech_topic],
+    functions=[transform_content, is_tech_topic, format_article],
     dbs=[db, contents_db, contents_db_1],
     knowledge=[demo_knowledge, demo_knowledge1],
 )
@@ -296,6 +320,107 @@ knowledge_agent = Agent(
     instructions="""You answer questions using the attached knowledge base.
 Search knowledge before answering. Cite the source when possible.""",
     markdown=True,
+)
+
+# --- Multi-agent workflow: Condition + Function ---
+topic_researcher = Agent(
+    id="topic-researcher",
+    name="Topic Researcher",
+    model=default_model,
+    instructions=(
+        "Research the given topic and return 3-5 key findings. "
+        "Be concise and factual. Do not write a full article."
+    ),
+    markdown=True,
+)
+
+tech_writer = Agent(
+    id="tech-writer",
+    name="Tech Writer",
+    model=default_model,
+    instructions=(
+        "You write technical articles for engineers. "
+        "Use the research findings to draft a clear, structured article "
+        "with headings, bullet points, and practical takeaways."
+    ),
+    markdown=True,
+)
+
+general_writer = Agent(
+    id="general-writer",
+    name="General Writer",
+    model=default_model,
+    instructions=(
+        "You write accessible articles for a general audience. "
+        "Use the research findings to draft a friendly, easy-to-read article "
+        "with a short intro, main points, and a conclusion."
+    ),
+    markdown=True,
+)
+
+content_editor = Agent(
+    id="content-editor",
+    name="Content Editor",
+    model=default_model,
+    instructions=(
+        "You are an editor. Polish the formatted draft for clarity and flow. "
+        "Keep the structure, fix awkward phrasing, and return the final article."
+    ),
+    markdown=True,
+)
+
+research_step = Step(
+    name="research",
+    description="Research the topic",
+    agent=topic_researcher,
+)
+
+tech_write_step = Step(
+    name="tech_write",
+    description="Write a technical article from research",
+    agent=tech_writer,
+)
+
+general_write_step = Step(
+    name="general_write",
+    description="Write a general-audience article from research",
+    agent=general_writer,
+)
+
+format_step = Step(
+    name="format_article",
+    description="Normalize the draft with a custom function",
+    executor=format_article,
+)
+
+edit_step = Step(
+    name="edit",
+    description="Polish the formatted draft",
+    agent=content_editor,
+)
+
+article_workflow = Workflow(
+    id="article-workflow",
+    name="Article Workflow",
+    description=(
+        "Multi-agent article pipeline: Research -> Condition(tech/general write) "
+        "-> Function(format) -> Edit. Same session keeps recent run history for steps."
+    ),
+    db=db,
+    add_workflow_history_to_steps=True,
+    num_history_runs=3,
+    steps=[
+        research_step,
+        Condition(
+            name="writer_route",
+            description="Route to tech or general writer based on topic keywords",
+            evaluator=is_tech_topic,
+            steps=[tech_write_step],
+            else_steps=[general_write_step],
+        ),
+        format_step,
+        edit_step,
+    ],
 )
 
 
@@ -360,6 +485,7 @@ async def lifespan(app, agent_os):
 agent_os = AgentOS(
     description="Tool Rendering weather demo for CopilotKit",
     agents=[weather_agent, knowledge_agent],
+    workflows=[article_workflow],
     db=db,
     registry=registry,
     knowledge=[demo_knowledge, demo_knowledge1],
@@ -394,7 +520,8 @@ if __name__ == "__main__":
     print("  Knowledge agent: knowledge-agent")
     print("  Knowledge UI: https://os.agno.com (sidebar -> Knowledge)")
     print("  Studio:   https://os.agno.com/studio/workflows/create")
-    print("  Functions: transform_content, is_tech_topic")
+    print("  Workflow: article-workflow (Research -> Condition -> Function -> Edit)")
+    print("  Functions: transform_content, is_tech_topic, format_article")
     print(f"  DB tools:  {DB_TOOLS_FILE} (edit tool_names, sync every {TOOL_SYNC_INTERVAL}s)")
     print("  Sessions: http://localhost:8000/sessions?type=agent&component_id=weather-agent&db_id=<db_id>")
     agent_os.serve(app="main:app", host="0.0.0.0", port=8000, reload=True)
